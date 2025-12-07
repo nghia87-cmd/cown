@@ -12,6 +12,16 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 import uuid
 
+
+def get_client_ip(request):
+    """Get real client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+    return ip
+
 from .models import PaymentPackage, Payment, Subscription, Invoice, PaymentWebhook
 from .serializers import (
     PaymentPackageSerializer, PaymentSerializer, CreatePaymentSerializer,
@@ -94,10 +104,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         
         if payment_method == 'VNPAY':
             vnpay = VNPayGateway()
+            client_ip = get_client_ip(request)
             payment_url = vnpay.create_payment_url(
                 order_id=payment.order_id,
                 amount=payment.amount,
                 order_desc=f"{package.name} - {request.user.email}",
+                ip_address=client_ip,
                 bank_code=serializer.validated_data.get('bank_code')
             )
         
@@ -310,6 +322,10 @@ def stripe_webhook(request):
         
         try:
             payment = Payment.objects.get(order_id=order_id)
+            # Idempotency check: Skip if already processed
+            if payment.status == 'COMPLETED':
+                return HttpResponse(status=200)
+            
             payment.mark_as_paid(
                 transaction_id=session.id,
                 gateway_response=dict(session)
@@ -357,6 +373,10 @@ def vnpay_return(request):
         # Update payment
         try:
             payment = Payment.objects.get(order_id=trans_info['order_id'])
+            # Idempotency check: Skip if already processed
+            if payment.status == 'COMPLETED':
+                return redirect(f"/payment/success?order_id={payment.order_id}")
+            
             payment.mark_as_paid(
                 transaction_id=trans_info['transaction_id'],
                 gateway_response=response_data

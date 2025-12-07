@@ -18,7 +18,7 @@ class VNPayGateway:
         self.vnp_hash_secret = settings.VNPAY_HASH_SECRET
         self.vnp_return_url = settings.VNPAY_RETURN_URL
     
-    def create_payment_url(self, order_id, amount, order_desc, bank_code=None, locale='vn'):
+    def create_payment_url(self, order_id, amount, order_desc, ip_address='127.0.0.1', bank_code=None, locale='vn'):
         """
         Create VNPay payment URL
         
@@ -26,6 +26,7 @@ class VNPayGateway:
             order_id: Order ID (max 40 chars)
             amount: Amount in VND (will be multiplied by 100)
             order_desc: Order description
+            ip_address: Client IP address (required by VNPay)
             bank_code: Bank code (optional)
             locale: Language (vn or en)
         
@@ -44,7 +45,7 @@ class VNPayGateway:
             'vnp_Amount': int(amount * 100),  # VNPay requires amount * 100
             'vnp_CreateDate': create_date,
             'vnp_CurrCode': 'VND',
-            'vnp_IpAddr': '127.0.0.1',  # Should be replaced with actual IP
+            'vnp_IpAddr': ip_address,  # Real client IP address
             'vnp_Locale': locale,
             'vnp_OrderInfo': order_desc,
             'vnp_OrderType': 'other',

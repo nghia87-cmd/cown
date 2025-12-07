@@ -121,6 +121,27 @@ class JobCreateUpdateSerializer(serializers.ModelSerializer):
             'contact_email', 'is_featured', 'is_urgent', 'is_remote'
         ]
     
+    def validate_company(self, value):
+        """Validate user has permission to post job for this company"""
+        request = self.context.get('request')
+        if not request or not request.user:
+            raise serializers.ValidationError("Authentication required")
+        
+        # Check if user is company member with appropriate role
+        from apps.companies.models import CompanyMember
+        is_member = CompanyMember.objects.filter(
+            company=value,
+            user=request.user,
+            role__in=['ADMIN', 'RECRUITER', 'OWNER']
+        ).exists()
+        
+        if not is_member and not request.user.is_staff:
+            raise serializers.ValidationError(
+                "You don't have permission to post jobs for this company"
+            )
+        
+        return value
+    
     def validate(self, data):
         # Validate salary range
         salary_min = data.get('salary_min')
