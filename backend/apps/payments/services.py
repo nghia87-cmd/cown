@@ -10,6 +10,14 @@ from django.db import transaction
 from .models import Payment, Subscription, Invoice, PaymentPackage
 from .vnpay import VNPayGateway
 from .stripe_gateway import StripeGateway
+from .exceptions import (
+    InvalidPackageError,
+    PaymentProcessingError,
+    SubscriptionQuotaExceeded,
+    SubscriptionNotFound,
+    SubscriptionExpired,
+    DuplicatePaymentError
+)
 
 
 class PaymentService:
@@ -32,7 +40,13 @@ class PaymentService:
         import uuid
         
         # Get package
-        package = PaymentPackage.objects.get(id=package_id, is_active=True)
+        try:
+            package = PaymentPackage.objects.get(id=package_id, is_active=True)
+        except PaymentPackage.DoesNotExist:
+            raise InvalidPackageError(
+                package_code=package_id,
+                message=f"Package {package_id} not found or inactive"
+            )
         
         # Create payment record
         order_id = f"ORD{uuid.uuid4().hex[:12].upper()}"
@@ -99,11 +113,17 @@ class PaymentService:
         """
         Process successful payment and create subscription
         Wrapped in transaction to ensure atomicity
+        
+        Raises:
+            DuplicatePaymentError: Payment already processed
         """
         # Idempotency check
         if payment.status == 'COMPLETED':
-            # Payment already processed, return existing subscription
-            return payment.subscriptions.first()
+            # Payment already processed
+            raise DuplicatePaymentError(
+                payment_id=str(payment.id),
+                transaction_id=transaction_id
+            )
         
         # Mark payment as completed
         payment.mark_as_paid(transaction_id, gateway_response)
@@ -166,7 +186,7 @@ class PaymentService:
         ).order_by('-created_at').first()
         
         if not subscription:
-            return False
+            raise SubscriptionNotFound(user_id=user.id)
         
         quota_map = {
             'job_posts': subscription.job_posts_remaining,
@@ -184,6 +204,10 @@ class PaymentService:
         """
         Consume quota for a specific action
         
+        Raises:
+            SubscriptionNotFound: No active subscription
+            SubscriptionQuotaExceeded: Quota exceeded
+        
         Returns:
             bool: True if quota consumed successfully
         """
@@ -195,7 +219,7 @@ class PaymentService:
         ).order_by('-created_at').first()
         
         if not subscription:
-            return False
+            raise SubscriptionNotFound(user_id=user.id)
         
         # Check and consume quota
         if quota_type == 'job_posts':
@@ -205,6 +229,12 @@ class PaymentService:
                 subscription.job_posts_remaining -= amount
                 subscription.save()
                 return True
+            else:
+                raise SubscriptionQuotaExceeded(
+                    quota_type='job_posts',
+                    current=subscription.job_posts_remaining,
+                    limit=subscription.package.job_posts_quota
+                )
                 
         elif quota_type == 'featured':
             if subscription.featured_remaining == 0:
@@ -213,6 +243,12 @@ class PaymentService:
                 subscription.featured_remaining -= amount
                 subscription.save()
                 return True
+            else:
+                raise SubscriptionQuotaExceeded(
+                    quota_type='featured',
+                    current=subscription.featured_remaining,
+                    limit=subscription.package.featured_quota
+                )
                 
         elif quota_type == 'urgent':
             if subscription.urgent_remaining == 0:
@@ -221,6 +257,12 @@ class PaymentService:
                 subscription.urgent_remaining -= amount
                 subscription.save()
                 return True
+            else:
+                raise SubscriptionQuotaExceeded(
+                    quota_type='urgent',
+                    current=subscription.urgent_remaining,
+                    limit=subscription.package.urgent_quota
+                )
                 
         elif quota_type == 'cv_views':
             if subscription.cv_views_remaining == 0:
@@ -229,6 +271,12 @@ class PaymentService:
                 subscription.cv_views_remaining -= amount
                 subscription.save()
                 return True
+            else:
+                raise SubscriptionQuotaExceeded(
+                    quota_type='cv_views',
+                    current=subscription.cv_views_remaining,
+                    limit=subscription.package.cv_views_quota
+                )
         
         return False
 

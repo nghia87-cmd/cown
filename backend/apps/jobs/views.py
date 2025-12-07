@@ -158,10 +158,22 @@ class JobViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         
-        # Track job view
+        # Track job view with Redis (high performance)
+        from .redis_counter import track_job_view
+        
         ip_address = self.get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
+        user_id = str(request.user.id) if request.user.is_authenticated else None
         
+        # Increment in Redis (async, no DB lock)
+        track_job_view(
+            job_id=str(instance.pk),
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        # Still create JobView record for analytics (can be async via Celery)
         JobView.objects.create(
             job=instance,
             user=request.user if request.user.is_authenticated else None,
@@ -169,9 +181,8 @@ class JobViewSet(viewsets.ModelViewSet):
             user_agent=user_agent
         )
         
-        # Increment view count
-        Job.objects.filter(pk=instance.pk).update(view_count=F('view_count') + 1)
-        instance.refresh_from_db()
+        # Note: view_count will be synced from Redis by Celery task
+        # No need to update here (eliminates DB lock contention)
         
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

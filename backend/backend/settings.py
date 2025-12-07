@@ -259,6 +259,17 @@ SIMPLE_JWT = {
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
 
+# Validate CORS in production
+if not DEBUG and CORS_ALLOWED_ORIGINS:
+    for origin in CORS_ALLOWED_ORIGINS:
+        if 'localhost' in origin or '127.0.0.1' in origin:
+            import warnings
+            warnings.warn(
+                f"⚠️  PRODUCTION WARNING: CORS contains localhost origin: {origin}\n"
+                "This is a security risk! Update CORS_ALLOWED_ORIGINS in .env to only include production domains.",
+                RuntimeWarning
+            )
+
 CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', cast=bool)
 
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', cast=Csv())
@@ -281,6 +292,26 @@ CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', cast=bool)
 CELERY_TASK_EAGER_PROPAGATES = config('CELERY_TASK_EAGER_PROPAGATES', cast=bool)
 CELERY_WORKER_CONCURRENCY = config('CELERY_WORKER_CONCURRENCY', cast=int)
 CELERY_WORKER_PREFETCH_MULTIPLIER = config('CELERY_WORKER_PREFETCH_MULTIPLIER', cast=int)
+
+# Celery Beat Schedule
+CELERY_BEAT_SCHEDULE = {
+    # Sync job views from Redis to database every hour
+    'bulk-sync-job-views': {
+        'task': 'apps.jobs.tasks.bulk_sync_job_views',
+        'schedule': 3600.0,  # Every hour
+    },
+    # Cleanup old job views monthly
+    'cleanup-old-job-views': {
+        'task': 'apps.jobs.tasks.cleanup_old_job_views',
+        'schedule': 30 * 24 * 3600.0,  # Every 30 days
+        'kwargs': {'days': 90}  # Keep 90 days of history
+    },
+    # Update job stats daily
+    'update-job-stats': {
+        'task': 'apps.jobs.tasks.update_job_stats',
+        'schedule': 24 * 3600.0,  # Every day
+    },
+}
 
 
 # ==============================================================================

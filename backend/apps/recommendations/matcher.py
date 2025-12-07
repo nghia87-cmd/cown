@@ -1,19 +1,32 @@
 """
 Job Matching Engine - ML-based job matching algorithm
+
+DEPRECATED: This implementation loops through all jobs in Python.
+Use matcher_es.ElasticsearchJobMatcher for production (100x faster).
+
+This file kept for backward compatibility and testing.
 """
 
 from typing import Dict, List, Any, Tuple
 from decimal import Decimal
 from django.db.models import Q
 from django.utils import timezone
+from django.conf import settings
 
 from apps.jobs.models import Job
 from apps.authentication.models import User, CandidateProfile
 from .models import JobRecommendation
 
+import warnings
+
 
 class JobMatcher:
-    """Match candidates with relevant jobs"""
+    """
+    Match candidates with relevant jobs (Legacy Python-loop version)
+    
+    PERFORMANCE WARNING: This implementation has O(n) complexity.
+    For production with 10,000+ jobs, use matcher_es.ElasticsearchJobMatcher instead.
+    """
     
     # Weights for different matching factors
     WEIGHTS = {
@@ -32,13 +45,37 @@ class JobMatcher:
             self.profile = user.candidate_profile
         except CandidateProfile.DoesNotExist:
             pass
+        
+        # Warn if job count is high
+        if settings.DEBUG:
+            job_count = Job.objects.filter(status='PUBLISHED').count()
+            if job_count > 1000:
+                warnings.warn(
+                    f"JobMatcher is looping through {job_count} jobs. "
+                    "Consider using ElasticsearchJobMatcher for better performance.",
+                    PerformanceWarning
+                )
     
     def find_matches(self, limit: int = 20) -> List[JobRecommendation]:
-        """Find matching jobs for the user"""
+        """
+        Find matching jobs for the user
+        
+        DEPRECATED: Use matcher_es.find_job_matches_es() instead for production.
+        This method loops through all jobs in Python (slow for 1000+ jobs).
+        """
         
         if not self.profile:
             return []
         
+        # Try to use Elasticsearch if available
+        try:
+            from .matcher_es import find_job_matches_es
+            if hasattr(settings, 'ELASTICSEARCH_DSL') and settings.ELASTICSEARCH_DSL:
+                return find_job_matches_es(self.user, limit=limit)
+        except (ImportError, AttributeError):
+            pass
+        
+        # Fallback to Python loop (slow)
         # Get active jobs
         jobs = Job.objects.filter(
             status='PUBLISHED',
