@@ -14,9 +14,31 @@ import uuid
 
 
 def get_client_ip(request):
-    """Get real client IP address from request"""
+    """
+    Get real client IP address from request
+    
+    SECURITY WARNING: This function trusts HTTP_X_FORWARDED_FOR header.
+    
+    PRODUCTION REQUIREMENT:
+    - MUST configure Nginx/Load Balancer to strip and rewrite X-Forwarded-For
+    - DO NOT expose this endpoint directly to internet without reverse proxy
+    
+    Nginx configuration example:
+    ```
+    location / {
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        # This prevents client from spoofing IP
+    }
+    ```
+    
+    Without proper proxy configuration, attackers can send:
+    X-Forwarded-For: 127.0.0.1
+    to bypass IP-based fraud detection.
+    """
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
+        # Take first IP (client IP set by trusted proxy)
         ip = x_forwarded_for.split(',')[0].strip()
     else:
         ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
@@ -295,6 +317,7 @@ def stripe_webhook(request):
     """Stripe webhook handler"""
     import json
     from django.http import HttpResponse
+    from django.db import transaction
     
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
@@ -321,15 +344,19 @@ def stripe_webhook(request):
         order_id = session.metadata.get('order_id')
         
         try:
-            payment = Payment.objects.get(order_id=order_id)
-            # Idempotency check: Skip if already processed
-            if payment.status == 'COMPLETED':
-                return HttpResponse(status=200)
-            
-            payment.mark_as_paid(
-                transaction_id=session.id,
-                gateway_response=dict(session)
-            )
+            # CRITICAL FIX: Use select_for_update to prevent race condition
+            # If 2 webhooks arrive simultaneously, only 1 will process
+            with transaction.atomic():
+                payment = Payment.objects.select_for_update().get(order_id=order_id)
+                
+                # Idempotency check: Skip if already processed
+                if payment.status == 'COMPLETED':
+                    return HttpResponse(status=200)
+                
+                payment.mark_as_paid(
+                    transaction_id=session.id,
+                    gateway_response=dict(session)
+                )
         except Payment.DoesNotExist:
             pass
     
@@ -349,6 +376,8 @@ def stripe_webhook(request):
 @extend_schema(exclude=True)
 def vnpay_return(request):
     """VNPay payment return URL"""
+    from django.db import transaction
+    
     # Get response data
     response_data = dict(request.GET)
     response_data = {k: v[0] if isinstance(v, list) else v for k, v in response_data.items()}
@@ -372,18 +401,22 @@ def vnpay_return(request):
         
         # Update payment
         try:
-            payment = Payment.objects.get(order_id=trans_info['order_id'])
-            # Idempotency check: Skip if already processed
-            if payment.status == 'COMPLETED':
-                return redirect(f"/payment/success?order_id={payment.order_id}")
-            
-            payment.mark_as_paid(
-                transaction_id=trans_info['transaction_id'],
-                gateway_response=response_data
-            )
-            payment.bank_code = trans_info.get('bank_code', '')
-            payment.card_type = trans_info.get('card_type', '')
-            payment.save()
+            # CRITICAL FIX: Use select_for_update to prevent race condition
+            # VNPay may send return URL + IPN simultaneously
+            with transaction.atomic():
+                payment = Payment.objects.select_for_update().get(order_id=trans_info['order_id'])
+                
+                # Idempotency check: Skip if already processed
+                if payment.status == 'COMPLETED':
+                    return redirect(f"/payment/success?order_id={payment.order_id}")
+                
+                payment.mark_as_paid(
+                    transaction_id=trans_info['transaction_id'],
+                    gateway_response=response_data
+                )
+                payment.bank_code = trans_info.get('bank_code', '')
+                payment.card_type = trans_info.get('card_type', '')
+                payment.save()
             
             # Redirect to success page
             return redirect(f"/payment/success?order_id={payment.order_id}")

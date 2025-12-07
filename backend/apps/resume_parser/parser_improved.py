@@ -152,32 +152,52 @@ class ImprovedResumeParser:
         """
         Extract text with better layout preservation
         Uses pdfplumber for PDF (better than PyPDF2)
+        
+        CRITICAL FIX: Support S3/MinIO by reading from file stream instead of .path
         """
-        file_path = self.parsed_resume.file.path
-        file_ext = os.path.splitext(file_path)[1].lower()
+        # CRITICAL: Don't use .path - it fails on S3/MinIO/Cloudinary
+        # Instead, read file content into memory
+        file_obj = self.parsed_resume.file
+        
+        # Get file extension from filename
+        file_name = file_obj.name
+        file_ext = os.path.splitext(file_name)[1].lower()
         
         try:
             if file_ext == '.pdf':
-                return self._extract_from_pdf_improved(file_path)
+                return self._extract_from_pdf_improved(file_obj)
             elif file_ext in ['.docx', '.doc']:
-                return self._extract_from_docx_improved(file_path)
+                return self._extract_from_docx_improved(file_obj)
             else:
                 raise ValueError(f"Unsupported file type: {file_ext}")
         except ImportError:
             # Fallback to basic extraction if pdfplumber not available
             self._log('EXTRACT', 'pdfplumber not available, using basic extraction', 'WARNING')
             if file_ext == '.pdf':
-                return self._extract_from_pdf_basic(file_path)
+                return self._extract_from_pdf_basic(file_obj)
             else:
-                return self._extract_from_docx_basic(file_path)
+                return self._extract_from_docx_basic(file_obj)
     
-    def _extract_from_pdf_improved(self, file_path: str) -> str:
-        """Extract text from PDF using pdfplumber (better layout)"""
+    def _extract_from_pdf_improved(self, file_obj) -> str:
+        """
+        Extract text from PDF using pdfplumber (better layout)
+        
+        CRITICAL FIX: Read from file object (stream) instead of path
+        Works with S3/MinIO/Cloudinary
+        """
         try:
             import pdfplumber
+            from io import BytesIO
             
             text = ""
-            with pdfplumber.open(file_path) as pdf:
+            
+            # Read file content into memory
+            file_obj.open('rb')
+            file_content = file_obj.read()
+            file_obj.close()
+            
+            # pdfplumber can read from BytesIO
+            with pdfplumber.open(BytesIO(file_content)) as pdf:
                 for page in pdf.pages:
                     # Extract text with layout
                     page_text = page.extract_text(layout=True)
@@ -187,24 +207,47 @@ class ImprovedResumeParser:
             return text
         except ImportError:
             # Fallback to basic PyPDF2
-            return self._extract_from_pdf_basic(file_path)
+            return self._extract_from_pdf_basic(file_obj)
     
-    def _extract_from_pdf_basic(self, file_path: str) -> str:
-        """Fallback PDF extraction with PyPDF2"""
+    def _extract_from_pdf_basic(self, file_obj) -> str:
+        """
+        Fallback PDF extraction with PyPDF2
+        
+        CRITICAL FIX: Read from file object instead of path
+        """
         import PyPDF2
+        from io import BytesIO
         
         text = ""
-        with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            for page in pdf_reader.pages:
-                text += page.extract_text()
+        
+        # Read file content into memory
+        file_obj.open('rb')
+        file_content = file_obj.read()
+        file_obj.close()
+        
+        # PyPDF2 can read from BytesIO
+        pdf_reader = PyPDF2.PdfReader(BytesIO(file_content))
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+        
         return text
     
-    def _extract_from_docx_improved(self, file_path: str) -> str:
-        """Extract text from DOCX with better structure"""
-        import docx
+    def _extract_from_docx_improved(self, file_obj) -> str:
+        """
+        Extract text from DOCX with better structure
         
-        doc = docx.Document(file_path)
+        CRITICAL FIX: Read from file object instead of path
+        """
+        import docx
+        from io import BytesIO
+        
+        # Read file content into memory
+        file_obj.open('rb')
+        file_content = file_obj.read()
+        file_obj.close()
+        
+        # python-docx can read from BytesIO
+        doc = docx.Document(BytesIO(file_content))
         text_parts = []
         
         # Extract from paragraphs
@@ -221,11 +264,21 @@ class ImprovedResumeParser:
         
         return "\n".join(text_parts)
     
-    def _extract_from_docx_basic(self, file_path: str) -> str:
-        """Basic DOCX extraction"""
-        import docx
+    def _extract_from_docx_basic(self, file_obj) -> str:
+        """
+        Basic DOCX extraction
         
-        doc = docx.Document(file_path)
+        CRITICAL FIX: Read from file object instead of path
+        """
+        import docx
+        from io import BytesIO
+        
+        # Read file content into memory
+        file_obj.open('rb')
+        file_content = file_obj.read()
+        file_obj.close()
+        
+        doc = docx.Document(BytesIO(file_content))
         return "\n".join([para.text for para in doc.paragraphs])
     
     def _detect_sections(self):

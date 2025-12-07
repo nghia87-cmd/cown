@@ -97,26 +97,41 @@ class RedisViewCounter:
     
     def sync_to_database(self, job_id: str) -> int:
         """
-        Sync Redis count to PostgreSQL
+        Sync Redis count to PostgreSQL (ATOMIC - prevents data loss)
         Called by Celery task
+        
+        CRITICAL FIX: Use DECRBY instead of DELETE to prevent losing views
+        that arrive between reading count and deleting key.
         
         Returns:
             Number of views synced
         """
         from apps.jobs.models import Job
         
+        key = f"{self.REDIS_KEY_PREFIX}{job_id}"
+        
+        # Get current count
         count = self.get_view_count(job_id)
         
         if count > 0:
-            # Atomic update
+            # Update database
             Job.objects.filter(pk=job_id).update(
                 view_count=F('view_count') + count
             )
             
-            # Reset Redis counter
-            self.reset_count(job_id)
+            # CRITICAL FIX: Use DECRBY instead of DELETE
+            # If new views arrive during sync (count=5, then +1 -> 6):
+            # - Old way (DELETE): Would delete 6, losing the new view
+            # - New way (DECRBY 5): 6 - 5 = 1, keeping the new view
+            self.redis_client.decrby(key, count)
+            
+            # If count went to 0 or negative (shouldn't happen), clean up
+            final_count = self.redis_client.get(key)
+            if final_count and int(final_count) <= 0:
+                self.redis_client.delete(key)
             
             return count
+        
         
         return 0
     

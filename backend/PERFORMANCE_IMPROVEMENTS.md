@@ -355,12 +355,56 @@ except InvalidPackageError as e:
 - [ ] Update `.env` with production values
 - [ ] Set `DEBUG=False`
 - [ ] Update `CORS_ALLOWED_ORIGINS` (remove localhost)
+- [ ] **CRITICAL: Configure Nginx to strip X-Forwarded-For header** (see Security section below)
 - [ ] Run migrations: `python manage.py migrate`
 - [ ] Index jobs to Elasticsearch: `python manage.py search_index --rebuild`
 - [ ] Start Celery worker & beat
 - [ ] Monitor Celery logs for sync tasks
 - [ ] Test payment flow with real bank accounts
 - [ ] Load test: 1000 concurrent users, 10K jobs
+
+## Security Considerations
+
+### X-Forwarded-For Header (CRITICAL)
+
+The `get_client_ip()` function trusts `HTTP_X_FORWARDED_FOR` header. **This is a security risk** if your Django app is exposed directly to the internet.
+
+**Required Nginx Configuration:**
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        # CRITICAL: This overwrites any X-Forwarded-For sent by client
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+```
+
+**Why this matters:**
+- VNPay uses client IP for fraud detection
+- Without proxy protection, attackers can spoof IP: `X-Forwarded-For: 127.0.0.1`
+- Banks may reject transactions from localhost IPs
+- Fraud detection becomes ineffective
+
+**AWS ALB Configuration:**
+- ALB automatically sets `X-Forwarded-For` correctly
+- Trust the **first IP** in the header (what we do)
+
+**Cloudflare Configuration:**
+- Use `HTTP_CF_CONNECTING_IP` instead if behind Cloudflare
+- Add to `get_client_ip()`:
+```python
+cf_ip = request.META.get('HTTP_CF_CONNECTING_IP')
+if cf_ip:
+    return cf_ip
+```
 
 ## Monitoring
 

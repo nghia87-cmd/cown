@@ -151,11 +151,27 @@ class JobCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Minimum salary cannot be greater than maximum salary")
         
         # Validate application deadline
+        # CRITICAL FIX: Only validate if deadline is being changed
+        # On update, if deadline isn't in the request, don't validate old value
         application_deadline = data.get('application_deadline')
         if application_deadline:
             from django.utils import timezone
-            if application_deadline < timezone.now():
-                raise serializers.ValidationError("Application deadline must be in the future")
+            
+            # Check if this is an update operation
+            if self.instance:
+                # Only validate if deadline is actually being changed
+                # Allow updates to other fields without deadline validation
+                if application_deadline != self.instance.application_deadline:
+                    if application_deadline < timezone.now():
+                        raise serializers.ValidationError(
+                            {"application_deadline": "Application deadline must be in the future"}
+                        )
+            else:
+                # Create operation - always validate
+                if application_deadline < timezone.now():
+                    raise serializers.ValidationError(
+                        {"application_deadline": "Application deadline must be in the future"}
+                    )
         
         return data
     
