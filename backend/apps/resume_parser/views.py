@@ -16,7 +16,7 @@ from .serializers import (
     UploadResumeSerializer,
     ApplyToProfileSerializer,
 )
-from .parser import ResumeParser
+from .parser_improved import ImprovedResumeParser as ResumeParser
 from .tasks import parse_resume_task
 
 

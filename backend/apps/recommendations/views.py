@@ -15,7 +15,8 @@ from .serializers import (
     RecommendationFeedbackSerializer,
     GenerateRecommendationsSerializer,
 )
-from .matcher import JobMatcher, CandidateMatcher
+from .matcher_es import ElasticsearchJobMatcher as JobMatcher
+from .matcher import CandidateMatcher
 
 
 class JobRecommendationViewSet(viewsets.ReadOnlyModelViewSet):
