@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     'apps.storage',
     'apps.email_service',
     'apps.export',
+    'apps.resume_parser',
     
     # Local apps - Admin & Monitoring
     'apps.audit_logs',
@@ -562,6 +563,28 @@ RECOMMENDATION_REFRESH_HOURS = config('RECOMMENDATION_REFRESH_HOURS', cast=int)
 # Review Settings
 MIN_REVIEW_LENGTH = config('MIN_REVIEW_LENGTH', cast=int)
 MAX_REVIEW_LENGTH = config('MAX_REVIEW_LENGTH', cast=int)
+
+
+# ==============================================================================
+# EMAIL CONFIGURATION
+# ==============================================================================
+
+# Email Backend
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+
+# SMTP Settings (for production)
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', cast=int, default=587)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool, default=True)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+
+# Default email addresses
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@cown.com')
+SERVER_EMAIL = config('SERVER_EMAIL', default='server@cown.com')
+
+# Email timeout
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', cast=int, default=30)
 
 
 # ==============================================================================

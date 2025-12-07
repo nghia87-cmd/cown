@@ -210,6 +210,23 @@ class ConversationCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     initial_message = serializers.CharField(required=False, allow_blank=True)
     
+    def validate_participant_ids(self, value):
+        """Validate that all participant IDs exist in the database"""
+        from apps.authentication.models import User
+        
+        # Check if all user IDs exist
+        existing_users = User.objects.filter(id__in=value).values_list('id', flat=True)
+        existing_user_set = set(existing_users)
+        requested_user_set = set(value)
+        
+        missing_users = requested_user_set - existing_user_set
+        if missing_users:
+            raise serializers.ValidationError(
+                f"The following user IDs do not exist: {', '.join(str(uid) for uid in missing_users)}"
+            )
+        
+        return value
+    
     def create(self, validated_data):
         current_user = self.context['request'].user
         participant_ids = validated_data['participant_ids']

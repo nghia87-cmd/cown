@@ -5,3 +5,7 @@ class SearchConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     verbose_name = 'Search'
     name = 'apps.search'
+    
+    def ready(self):
+        """Import signals when app is ready"""
+        import apps.search.signals

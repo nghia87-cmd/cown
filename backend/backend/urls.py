@@ -27,6 +27,11 @@ urlpatterns = [
     path('api/jobs/', include('apps.saved_jobs.urls')),
     path('api/messaging/', include('apps.messaging.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
+    path('api/emails/', include('apps.email_service.urls')),
+    path('api/payments/', include('apps.payments.urls')),
+    path('api/search/', include('apps.search.urls')),
+    path('api/resume/', include('apps.resume_parser.urls')),
+    path('api/recommendations/', include('apps.recommendations.urls')),
 ]
 
 # Serve media files in development

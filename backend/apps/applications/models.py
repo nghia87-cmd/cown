@@ -6,6 +6,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+from model_utils import FieldTracker
 
 
 class ApplicationStatus(models.TextChoices):
@@ -99,6 +100,9 @@ class Application(models.Model):
     reviewed_at = models.DateTimeField(_('reviewed at'), blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Field tracker for status changes
+    tracker = FieldTracker(fields=['status'])
     
     class Meta:
         db_table = 'applications'
