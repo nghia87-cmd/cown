@@ -5,10 +5,13 @@ Authentication Serializers
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import CandidateProfile, EmployerProfile, EmailVerification, PasswordReset
+import logging
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -68,24 +71,39 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
+        """
+        Create user with atomic transaction to ensure profile is created
+        SECURITY FIX: Wrap in transaction to prevent partial user creation
+        """
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
         
-        user = User.objects.create(**validated_data)
-        user.set_password(password)
-        user.save()
-        
-        # Create profile based on role
-        if user.role == 'CANDIDATE':
-            CandidateProfile.objects.create(user=user)
-        elif user.role == 'EMPLOYER':
-            EmployerProfile.objects.create(
-                user=user,
-                company_name='',
-                position=''
+        try:
+            with transaction.atomic():
+                # Create user
+                user = User.objects.create(**validated_data)
+                user.set_password(password)
+                user.save()
+                
+                # Create profile based on role (inside same transaction)
+                if user.role == 'CANDIDATE':
+                    CandidateProfile.objects.create(user=user)
+                    logger.info(f"Created candidate profile for user {user.email}")
+                elif user.role == 'EMPLOYER':
+                    EmployerProfile.objects.create(
+                        user=user,
+                        company_name='',
+                        position=''
+                    )
+                    logger.info(f"Created employer profile for user {user.email}")
+                
+                return user
+                
+        except Exception as e:
+            logger.error(f"User registration failed for {validated_data.get('email')}: {e}")
+            raise serializers.ValidationError(
+                {"detail": "Registration failed. Please try again."}
             )
-        
-        return user
 
 
 class LoginSerializer(serializers.Serializer):

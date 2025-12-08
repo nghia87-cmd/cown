@@ -1,5 +1,10 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import UploadedFile
+from .security import FileSecurityScanner
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class UploadedFileSerializer(serializers.ModelSerializer):
@@ -36,18 +41,33 @@ class FileUploadSerializer(serializers.Serializer):
     is_public = serializers.BooleanField(default=False)
     
     def validate_file(self, value):
-        """Validate file size and type"""
-        # Max file size: 10MB
-        max_size = 10 * 1024 * 1024
-        if value.size > max_size:
-            raise serializers.ValidationError("File size cannot exceed 10MB")
+        """
+        Enhanced file validation with security scanning
         
-        # Validate extension
-        allowed_extensions = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'txt']
-        ext = value.name.split('.')[-1].lower()
-        if ext not in allowed_extensions:
-            raise serializers.ValidationError(
-                f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
-            )
+        SECURITY IMPROVEMENTS:
+        1. File extension validation
+        2. MIME type validation
+        3. File signature (magic bytes) check
+        4. Virus scanning (ClamAV if available)
+        5. Size limits
+        """
+        # Determine file category based on file_type
+        file_type = self.initial_data.get('file_type', 'DOCUMENT')
+        
+        if file_type in ['RESUME', 'DOCUMENT']:
+            category = 'documents'
+        elif file_type == 'AVATAR':
+            category = 'images'
+        else:
+            category = 'documents'  # Default
+        
+        try:
+            # Run comprehensive security scan
+            FileSecurityScanner.validate_file(value, category)
+            
+        except DjangoValidationError as e:
+            # Convert Django ValidationError to DRF ValidationError
+            logger.error(f"File validation failed: {e}")
+            raise serializers.ValidationError(str(e))
         
         return value

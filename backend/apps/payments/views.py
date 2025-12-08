@@ -5,44 +5,79 @@ Payment Views
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
+from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
     """
-    Get real client IP address from request
+    Get real client IP address from request with enhanced security
     
-    SECURITY WARNING: This function trusts HTTP_X_FORWARDED_FOR header.
+    SECURITY IMPROVEMENTS:
+    1. Validate IP format
+    2. Check against trusted proxy list
+    3. Reject suspicious patterns
     
     PRODUCTION REQUIREMENT:
     - MUST configure Nginx/Load Balancer to strip and rewrite X-Forwarded-For
-    - DO NOT expose this endpoint directly to internet without reverse proxy
+    - Set TRUSTED_PROXY_IPS in settings.py
     
-    Nginx configuration example:
+    Nginx configuration:
     ```
     location / {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Real-IP $remote_addr;
-        # This prevents client from spoofing IP
     }
     ```
-    
-    Without proper proxy configuration, attackers can send:
-    X-Forwarded-For: 127.0.0.1
-    to bypass IP-based fraud detection.
     """
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        # Take first IP (client IP set by trusted proxy)
-        ip = x_forwarded_for.split(',')[0].strip()
-    else:
-        ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
-    return ip
+    # Get trusted proxies from settings (default empty list = trust none)
+    trusted_proxies = getattr(settings, 'TRUSTED_PROXY_IPS', [])
+    
+    # First, get the immediate client IP (this is the proxy if behind one)
+    remote_addr = request.META.get('REMOTE_ADDR', '127.0.0.1')
+    
+    # Only trust X-Forwarded-For if request comes from trusted proxy
+    if trusted_proxies and remote_addr in trusted_proxies:
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            # Take first IP (real client IP set by trusted proxy)
+            ip = x_forwarded_for.split(',')[0].strip()
+            
+            # Validate IP format to prevent injection
+            if not _is_valid_ip(ip):
+                logger.warning(f"Invalid IP format in X-Forwarded-For: {ip}")
+                return remote_addr
+            
+            return ip
+    
+    # If not behind trusted proxy, use direct connection IP
+    return remote_addr
+
+
+def _is_valid_ip(ip_string):
+    """Validate IP address format (basic check)"""
+    import re
+    # IPv4 pattern
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    # IPv6 pattern (simplified)
+    ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){7}[0-9a-fA-F]{0,4}$'
+    
+    if re.match(ipv4_pattern, ip_string):
+        # Validate each octet is 0-255
+        parts = ip_string.split('.')
+        return all(0 <= int(part) <= 255 for part in parts)
+    elif re.match(ipv6_pattern, ip_string):
+        return True
+    
+    return False
 
 from .models import PaymentPackage, Payment, Subscription, Invoice, PaymentWebhook
 from .serializers import (

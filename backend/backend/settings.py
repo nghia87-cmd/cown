@@ -45,6 +45,11 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if config('SECURE_
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 
+# Trusted Proxy IPs (for secure IP detection)
+# Only accept X-Forwarded-For from these IPs
+# Example: ['10.0.0.1', '172.16.0.1'] for internal load balancers
+TRUSTED_PROXY_IPS = config('TRUSTED_PROXY_IPS', default='', cast=Csv())
+
 
 # ==============================================================================
 # APPLICATION DEFINITION
