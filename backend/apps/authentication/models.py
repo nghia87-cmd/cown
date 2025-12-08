@@ -13,6 +13,7 @@ class UserRole(models.TextChoices):
     """User role types"""
     CANDIDATE = 'CANDIDATE', _('Candidate')
     EMPLOYER = 'EMPLOYER', _('Employer')
+    HEADHUNTER = 'HEADHUNTER', _('Headhunter')
     ADMIN = 'ADMIN', _('Admin')
     STAFF = 'STAFF', _('Staff')
 
