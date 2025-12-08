@@ -47,6 +47,12 @@ Pillow==11.0.0       # Image processing
 requests==2.32.3
 pillow==11.0.0
 
+# AI & Machine Learning
+openai==1.59.5  # OpenAI API for embeddings and LLM
+sentence-transformers==3.3.1  # BERT-based embeddings (local)
+numpy==2.2.1  # Vector operations
+pgvector==0.3.6  # PostgreSQL vector extension support
+
 # Development
 pytest==8.3.4
 pytest-django==4.9.0

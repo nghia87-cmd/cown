@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'apps.recommendations',
     'apps.headhunters',
     'apps.salary_calculator',
+    'apps.ai_matching',
     
     # Local apps - Integration
     'apps.search',
@@ -358,6 +359,28 @@ CELERY_BEAT_SCHEDULE = {
     'bulk-reindex-companies': {
         'task': 'apps.search.tasks.bulk_reindex_companies',
         'schedule': 7 * 24 * 3600.0,  # Weekly - full company reindex
+    },
+    
+    # AI Matching - Embedding Generation & Maintenance
+    'bulk-generate-job-embeddings': {
+        'task': 'apps.ai_matching.tasks.bulk_generate_job_embeddings',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - generate embeddings for all active jobs
+    },
+    'bulk-generate-candidate-embeddings': {
+        'task': 'apps.ai_matching.tasks.bulk_generate_candidate_embeddings',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - generate embeddings for all candidates
+    },
+    'refresh-stale-embeddings': {
+        'task': 'apps.ai_matching.tasks.refresh_stale_embeddings',
+        'schedule': 24 * 3600.0,  # Daily - regenerate embeddings marked as stale
+    },
+    'cleanup-expired-matches': {
+        'task': 'apps.ai_matching.tasks.cleanup_expired_matches',
+        'schedule': 24 * 3600.0,  # Daily - delete expired semantic matches
+    },
+    'cleanup-old-embedding-cache': {
+        'task': 'apps.ai_matching.tasks.cleanup_old_embedding_cache',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - clean cache not accessed in 90 days
     },
 }
 
