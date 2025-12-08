@@ -180,3 +180,23 @@ class ResumeParsingLog(models.Model):
     
     def __str__(self):
         return f"{self.level}: {self.step}"
+
+
+# Import LLM models
+from .models_llm import (
+    CVAnalysis,
+    LLMPromptTemplate,
+    CVAnalysisCache,
+)
+
+__all__ = [
+    'ParsedResume',
+    'Skill',
+    'Experience',
+    'Education',
+    'Certification',
+    'ResumeParsingLog',
+    'CVAnalysis',
+    'LLMPromptTemplate',
+    'CVAnalysisCache',
+]

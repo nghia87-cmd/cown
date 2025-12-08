@@ -382,6 +382,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.ai_matching.tasks.cleanup_old_embedding_cache',
         'schedule': 7 * 24 * 3600.0,  # Weekly - clean cache not accessed in 90 days
     },
+    
+    # LLM CV Analysis - Cache Maintenance
+    'cleanup-expired-cv-analysis-cache': {
+        'task': 'apps.resume_parser.tasks_llm.cleanup_expired_cv_analysis_cache',
+        'schedule': 24 * 3600.0,  # Daily - delete expired CV analysis cache
+    },
 }
 
 
