@@ -234,8 +234,26 @@ class Subscription(models.Model):
         ('EXPIRED', 'Expired'),
         ('CANCELLED', 'Cancelled'),
         ('SUSPENDED', 'Suspended'),
+        ('PAST_DUE', 'Past Due'),  # Payment failed, awaiting retry
     ]
     status = models.CharField(_('status'), max_length=20, choices=STATUS_CHOICES, default='ACTIVE', db_index=True)
+    
+    # Stripe Recurring Billing
+    stripe_subscription_id = models.CharField(
+        _('Stripe subscription ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text='Stripe subscription ID for recurring billing'
+    )
+    stripe_customer_id = models.CharField(
+        _('Stripe customer ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Stripe customer ID for this subscription'
+    )
     
     # Auto-renewal
     auto_renew = models.BooleanField(_('auto renew'), default=False)

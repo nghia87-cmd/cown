@@ -60,7 +60,7 @@ class ImprovedResumeParser:
     
     # Enhanced regex patterns
     EMAIL_PATTERN = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    PHONE_PATTERN = r'(?:\+84|0)(?:\d{9,10})'  # Vietnamese phone pattern
+    PHONE_PATTERN = r'[\(\+]?84[\)\s\-]?\d{1,4}[\s\-]?\d{1,4}[\s\-]?\d{1,4}|0\d{1,4}[\s\-]?\d{1,4}[\s\-]?\d{1,4}'  # Vietnamese phone formats
     LINKEDIN_PATTERN = r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+'
     GITHUB_PATTERN = r'(?:https?://)?(?:www\.)?github\.com/[\w-]+'
     

@@ -2,6 +2,29 @@
 Celery tasks for notifications
 """
 from celery import shared_task
+
+
+@shared_task
+def send_email_notification(user_id, subject, message, **kwargs):
+    """Send email notification to user"""
+    from django.contrib.auth import get_user_model
+    from django.core.mail import send_mail
+    
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_id)
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email='noreply@onetop.vn',
+            recipient_list=[user.email],
+            fail_silently=False
+        )
+        return {'status': 'sent', 'user_id': user_id}
+    except User.DoesNotExist:
+        return {'status': 'error', 'message': 'User not found'}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.conf import settings

@@ -221,6 +221,15 @@ class Interview(models.Model):
     host_link = models.URLField(_('host link'), blank=True, null=True)  # For moderator
     participant_link = models.URLField(_('participant link'), blank=True, null=True)
     
+    # Google Calendar Integration
+    calendar_event_id = models.CharField(
+        _('calendar event ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Google Calendar event ID for sync'
+    )
+    
     # Participants
     interviewer = models.ForeignKey(
         settings.AUTH_USER_MODEL,

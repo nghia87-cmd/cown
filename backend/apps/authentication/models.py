@@ -97,6 +97,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     facebook_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     linkedin_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     
+    # Payment Integration
+    stripe_customer_id = models.CharField(
+        _('Stripe customer ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text='Stripe customer ID for recurring billing'
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(_('created at'), auto_now_add=True)
     updated_at = models.DateTimeField(_('updated at'), auto_now=True)
