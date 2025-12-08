@@ -295,21 +295,43 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = config('CELERY_WORKER_PREFETCH_MULTIPLIER', 
 
 # Celery Beat Schedule
 CELERY_BEAT_SCHEDULE = {
-    # Sync job views from Redis to database every hour
+    # Job View Tracking
     'bulk-sync-job-views': {
         'task': 'apps.jobs.tasks.bulk_sync_job_views',
         'schedule': 3600.0,  # Every hour
     },
-    # Cleanup old job views monthly
     'cleanup-old-job-views': {
         'task': 'apps.jobs.tasks.cleanup_old_job_views',
         'schedule': 30 * 24 * 3600.0,  # Every 30 days
-        'kwargs': {'days': 90}  # Keep 90 days of history
+        'kwargs': {'days': 90}
     },
-    # Update job stats daily
     'update-job-stats': {
         'task': 'apps.jobs.tasks.update_job_stats',
         'schedule': 24 * 3600.0,  # Every day
+    },
+    
+    # CRITICAL: Subscription Management
+    'expire-subscriptions': {
+        'task': 'apps.payments.tasks.expire_subscriptions',
+        'schedule': 3600.0,  # Every hour - MUST run regularly!
+    },
+    'process-auto-renewals': {
+        'task': 'apps.payments.tasks.process_auto_renewals',
+        'schedule': 24 * 3600.0,  # Every day
+    },
+    'send-renewal-reminders': {
+        'task': 'apps.payments.tasks.send_renewal_reminders',
+        'schedule': 24 * 3600.0,  # Every day at midnight
+    },
+    'cleanup-pending-payments': {
+        'task': 'apps.payments.tasks.cleanup_pending_payments',
+        'schedule': 24 * 3600.0,  # Every day
+    },
+    
+    # Monthly Tasks
+    'generate-monthly-invoices': {
+        'task': 'apps.payments.tasks.generate_monthly_invoices',
+        'schedule': 30 * 24 * 3600.0,  # Every 30 days
     },
 }
 

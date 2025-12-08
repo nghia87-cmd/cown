@@ -203,6 +203,24 @@ class Interview(models.Model):
     location = models.TextField(_('location'), blank=True)  # For onsite
     meeting_link = models.URLField(_('meeting link'), blank=True, null=True)  # For video
     
+    # Video Call Integration
+    video_provider = models.CharField(
+        _('video provider'),
+        max_length=20,
+        choices=[
+            ('JITSI', 'Jitsi Meet'),
+            ('ZOOM', 'Zoom'),
+            ('GOOGLE_MEET', 'Google Meet'),
+            ('CUSTOM', 'Custom Link'),
+        ],
+        blank=True,
+        null=True
+    )
+    video_meeting_id = models.CharField(_('meeting ID'), max_length=255, blank=True)
+    video_password = models.CharField(_('meeting password'), max_length=255, blank=True)
+    host_link = models.URLField(_('host link'), blank=True, null=True)  # For moderator
+    participant_link = models.URLField(_('participant link'), blank=True, null=True)
+    
     # Participants
     interviewer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -267,6 +285,79 @@ class Interview(models.Model):
     
     def __str__(self):
         return f"{self.title} - {self.application.candidate_name}"
+    
+    def generate_video_meeting(self, provider: str = 'jitsi', save: bool = True):
+        """
+        Auto-generate video meeting link
+        
+        Args:
+            provider: 'jitsi', 'zoom', or 'google_meet'
+            save: Whether to save the model after generating
+        
+        Returns:
+            Meeting details dict
+        
+        Usage:
+            interview = Interview.objects.get(pk=interview_id)
+            interview.generate_video_meeting(provider='jitsi')
+        """
+        from apps.interviews.video_call import create_video_meeting
+        
+        # Get recruiter and candidate info
+        recruiter = self.interviewer
+        candidate = self.application.user
+        
+        meeting = create_video_meeting(
+            provider=provider,
+            interview_id=str(self.id),
+            topic=f"{self.title} - {self.application.job.title}",
+            start_time=self.scheduled_at.isoformat() if provider != 'jitsi' else None,
+            duration_minutes=self.duration_minutes,
+            host_name=recruiter.full_name if recruiter else "Recruiter",
+            participant_name=candidate.full_name if candidate else "Candidate",
+            host_email=recruiter.email if recruiter else None,
+            participant_email=candidate.email if candidate else None
+        )
+        
+        # Update model fields
+        self.video_provider = provider.upper()
+        self.meeting_link = meeting['meeting_link']
+        self.video_meeting_id = meeting.get('meeting_id', meeting.get('room_name', ''))
+        self.video_password = meeting.get('password', '')
+        self.host_link = meeting.get('host_link', meeting['meeting_link'])
+        self.participant_link = meeting.get('participant_link', meeting['meeting_link'])
+        
+        if save:
+            self.save()
+        
+        return meeting
+    
+    def send_calendar_invite(self):
+        """
+        Send calendar invite to candidate and interviewers
+        
+        Uses: Google Calendar API or iCal format
+        """
+        from apps.notifications.tasks import send_calendar_invite as send_invite_task
+        
+        # Prepare attendees
+        attendees = [self.application.user.email]
+        if self.interviewer:
+            attendees.append(self.interviewer.email)
+        attendees.extend(
+            self.additional_interviewers.values_list('email', flat=True)
+        )
+        
+        # Send invite
+        send_invite_task.delay(
+            interview_id=str(self.id),
+            summary=self.title,
+            description=self.description,
+            start_time=self.scheduled_at.isoformat(),
+            duration_minutes=self.duration_minutes,
+            location=self.meeting_link or self.location,
+            attendees=attendees
+        )
 
 
 class ApplicationActivity(models.Model):

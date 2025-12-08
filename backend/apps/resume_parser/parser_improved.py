@@ -96,6 +96,21 @@ class ImprovedResumeParser:
             
             self._log('EXTRACT', f'Extracted {len(self.text)} characters from {len(self.lines)} lines', 'INFO')
             
+            # AUTO OCR FALLBACK: Check if text extraction failed (scanned PDF)
+            if len(self.text) < 100 and self.parsed_resume.file.name.endswith('.pdf'):
+                self._log('OCR', 'Text extraction failed, attempting OCR fallback', 'WARNING')
+                
+                try:
+                    from .ocr_parser import OCRResumeParser
+                    
+                    ocr_parser = OCRResumeParser(self.parsed_resume.file, ocr_engine='tesseract')
+                    self.text = ocr_parser.extract_text()
+                    self.lines = [line.strip() for line in self.text.split('\n') if line.strip()]
+                    
+                    self._log('OCR', f'OCR extracted {len(self.text)} characters', 'INFO')
+                except Exception as e:
+                    self._log('OCR', f'OCR fallback failed: {str(e)}', 'ERROR')
+            
             # Detect sections
             self._detect_sections()
             
