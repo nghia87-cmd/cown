@@ -1,48 +1,69 @@
 """
 Django Signals for Elasticsearch Indexing
-Auto-index jobs and companies on create/update
+Async indexing via Celery to prevent blocking on save operations
 """
 
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django_elasticsearch_dsl.registries import registry
+import logging
 
 from apps.jobs.models import Job
 from apps.companies.models import Company
 
+logger = logging.getLogger(__name__)
+
 
 @receiver(post_save, sender=Job)
 def update_job_index(sender, instance, **kwargs):
-    """Update job document in Elasticsearch"""
+    """
+    Trigger async task to update job document in Elasticsearch
+    Non-blocking - will not fail if Elasticsearch is down
+    """
+    from apps.search.tasks import index_job_task
+    
     try:
-        registry.update(instance)
+        # Queue task for async processing
+        index_job_task.delay(instance.id)
     except Exception as e:
-        # Log error but don't fail the save
-        print(f"Error indexing job {instance.id}: {e}")
+        # Log error but don't fail the save operation
+        logger.error(f"Failed to queue job indexing task for {instance.id}: {e}")
 
 
 @receiver(post_delete, sender=Job)
 def delete_job_index(sender, instance, **kwargs):
-    """Delete job document from Elasticsearch"""
+    """
+    Trigger async task to delete job document from Elasticsearch
+    """
+    from apps.search.tasks import delete_job_index_task
+    
     try:
-        registry.delete(instance)
+        delete_job_index_task.delay(instance.id)
     except Exception as e:
-        print(f"Error deleting job {instance.id}: {e}")
+        logger.error(f"Failed to queue job deletion task for {instance.id}: {e}")
 
 
 @receiver(post_save, sender=Company)
 def update_company_index(sender, instance, **kwargs):
-    """Update company document in Elasticsearch"""
+    """
+    Trigger async task to update company document in Elasticsearch
+    """
+    from apps.search.tasks import index_company_task
+    
     try:
-        registry.update(instance)
+        index_company_task.delay(instance.id)
     except Exception as e:
-        print(f"Error indexing company {instance.id}: {e}")
+        logger.error(f"Failed to queue company indexing task for {instance.id}: {e}")
 
 
 @receiver(post_delete, sender=Company)
 def delete_company_index(sender, instance, **kwargs):
-    """Delete company document from Elasticsearch"""
+    """
+    Trigger async task to delete company document from Elasticsearch
+    """
+    from apps.search.tasks import delete_company_index_task
+    
     try:
-        registry.delete(instance)
+        delete_company_index_task.delay(instance.id)
     except Exception as e:
-        print(f"Error deleting company {instance.id}: {e}")
+        logger.error(f"Failed to queue company deletion task for {instance.id}: {e}")
+

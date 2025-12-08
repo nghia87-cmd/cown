@@ -400,9 +400,17 @@ class StripeRecurringBilling:
             return {'error': 'Subscription not found'}
     
     def _handle_invoice_failed(self, invoice) -> Dict:
-        """Handle failed recurring payment"""
+        """
+        Handle failed recurring payment with grace period logic
+        
+        Grace Period Policy:
+        - 1st failure: 7 days grace period
+        - 2nd-3rd failures: Continue grace period with warnings
+        - 4th failure: Cancel subscription
+        """
         from apps.payments.models import Subscription as DBSubscription
         from apps.notifications.tasks import send_email_notification
+        from datetime import timedelta
         
         subscription_id = invoice.subscription
         if not subscription_id:
@@ -413,18 +421,39 @@ class StripeRecurringBilling:
                 stripe_subscription_id=subscription_id
             )
             
-            # Mark as past due
-            db_sub.status = 'PAST_DUE'
+            # Increment retry counter
+            db_sub.payment_retry_count += 1
+            
+            # Set grace period on first failure (7 days)
+            if db_sub.payment_retry_count == 1:
+                db_sub.grace_period_ends = timezone.now() + timedelta(days=7)
+                db_sub.status = 'PAST_DUE'
+                notification_template = 'payment_failed_grace_period'
+            
+            # Continue grace period but send urgent warning
+            elif db_sub.payment_retry_count < 4:
+                db_sub.status = 'PAST_DUE'
+                notification_template = 'payment_failed_urgent'
+            
+            # Final failure - cancel subscription
+            else:
+                db_sub.status = 'CANCELLED'
+                db_sub.cancelled_at = timezone.now()
+                db_sub.grace_period_ends = None
+                notification_template = 'subscription_cancelled_nonpayment'
+            
             db_sub.save()
             
             # Send notification
             send_email_notification.delay(
                 user_id=db_sub.user.id,
-                template='payment_failed',
+                template=notification_template,
                 context={
                     'subscription': db_sub.package.name,
                     'amount': invoice.amount_due / 100,
-                    'retry_date': invoice.next_payment_attempt
+                    'retry_count': db_sub.payment_retry_count,
+                    'grace_period_ends': db_sub.grace_period_ends,
+                    'next_retry_date': invoice.next_payment_attempt
                 }
             )
             

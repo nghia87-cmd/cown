@@ -357,8 +357,41 @@ class ImprovedResumeParser:
         
         return ' '.join(summary_lines)
     
+    def _get_skills_from_cache(self) -> List[str]:
+        """
+        Get skills list from Redis cache (loaded from database)
+        Falls back to basic list if cache miss
+        """
+        from django.core.cache import cache
+        
+        # Try to get from cache first
+        skills = cache.get('resume_parser:skills')
+        
+        if skills is None:
+            # Cache miss - load from database and cache
+            from apps.master_data.models import Skill
+            skills = list(
+                Skill.objects.filter(is_active=True)
+                .values_list('name', flat=True)
+            )
+            
+            if skills:
+                # Cache for 24 hours
+                cache.set('resume_parser:skills', skills, timeout=86400)
+            else:
+                # Fallback to minimal list if DB is empty
+                skills = [
+                    'Python', 'JavaScript', 'Java', 'React', 'Django', 
+                    'PostgreSQL', 'AWS', 'Docker', 'Kubernetes'
+                ]
+        
+        return skills
+    
     def _extract_skills_improved(self) -> List[str]:
-        """Enhanced skill extraction with NLP-like matching"""
+        """
+        Enhanced skill extraction with dynamic skills database
+        Uses Redis cache + Database instead of hardcoded list
+        """
         skills = set()
         
         # Get skills section text if available
@@ -368,10 +401,13 @@ class ImprovedResumeParser:
             for i in range(start_idx, min(start_idx + 20, len(self.lines))):
                 skills_section_text += " " + self.lines[i]
         
-        # Match against common skills (case-insensitive)
+        # Match against skills from database/cache (case-insensitive)
         text_lower = (self.text + " " + skills_section_text).lower()
         
-        for skill in self.COMMON_SKILLS:
+        # Get dynamic skills list
+        common_skills = self._get_skills_from_cache()
+        
+        for skill in common_skills:
             # Use word boundary for better matching
             pattern = r'\b' + re.escape(skill.lower()) + r'\b'
             if re.search(pattern, text_lower):

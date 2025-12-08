@@ -258,6 +258,19 @@ class Subscription(models.Model):
     # Auto-renewal
     auto_renew = models.BooleanField(_('auto renew'), default=False)
     
+    # Grace Period for payment failures
+    grace_period_ends = models.DateTimeField(
+        _('grace period ends'),
+        null=True,
+        blank=True,
+        help_text='End date of grace period after payment failure'
+    )
+    payment_retry_count = models.PositiveIntegerField(
+        _('payment retry count'),
+        default=0,
+        help_text='Number of failed payment retry attempts'
+    )
+    
     # Timestamps
     created_at = models.DateTimeField(_('created at'), auto_now_add=True)
     updated_at = models.DateTimeField(_('updated at'), auto_now=True)
@@ -278,8 +291,29 @@ class Subscription(models.Model):
     
     @property
     def is_active(self):
-        """Check if subscription is active"""
-        return self.status == 'ACTIVE' and self.end_date >= timezone.now()
+        """
+        Check if subscription is active
+        Includes grace period check for PAST_DUE subscriptions
+        """
+        now = timezone.now()
+        
+        # Active subscription within normal period
+        if self.status == 'ACTIVE' and self.end_date >= now:
+            return True
+        
+        # PAST_DUE but still in grace period
+        if self.status == 'PAST_DUE':
+            if self.grace_period_ends and self.grace_period_ends >= now:
+                return True  # Allow usage during grace period
+        
+        return False
+    
+    @property
+    def in_grace_period(self):
+        """Check if subscription is in grace period"""
+        if self.status == 'PAST_DUE' and self.grace_period_ends:
+            return self.grace_period_ends >= timezone.now()
+        return False
     
     def check_and_update_status(self):
         """Check and update subscription status"""
