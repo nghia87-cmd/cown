@@ -61,7 +61,7 @@ class ApplicationPipeline(models.Model):
         return f"{self.company.name} - {self.name}"
 
 
-class ApplicationStage(models.Model):
+class KanbanStage(models.Model):
     """
     Individual stages in the hiring pipeline (Kanban columns)
     Example: "New", "Phone Screen", "Technical Test", "Interview", "Offer"
@@ -152,9 +152,9 @@ class ApplicationStage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'application_stages'
-        verbose_name = _('application stage')
-        verbose_name_plural = _('application stages')
+        db_table = 'kanban_stages'
+        verbose_name = _('kanban stage')
+        verbose_name_plural = _('kanban stages')
         unique_together = [['pipeline', 'name']]
         ordering = ['pipeline', 'order']
         indexes = [
@@ -186,14 +186,14 @@ class StageTransition(models.Model):
         related_name='stage_transitions'
     )
     from_stage = models.ForeignKey(
-        ApplicationStage,
+        KanbanStage,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='transitions_from'
     )
     to_stage = models.ForeignKey(
-        ApplicationStage,
+        KanbanStage,
         on_delete=models.CASCADE,
         related_name='transitions_to'
     )
@@ -328,7 +328,7 @@ class PipelineMetrics(models.Model):
         related_name='metrics'
     )
     stage = models.ForeignKey(
-        ApplicationStage,
+        KanbanStage,
         on_delete=models.CASCADE,
         related_name='metrics'
     )

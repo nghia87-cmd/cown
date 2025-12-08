@@ -87,6 +87,8 @@ INSTALLED_APPS = [
     'apps.reviews',
     'apps.saved_jobs',
     'apps.recommendations',
+    'apps.headhunters',
+    'apps.salary_calculator',
     
     # Local apps - Integration
     'apps.search',

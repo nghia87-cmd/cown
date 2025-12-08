@@ -415,3 +415,24 @@ class ApplicationActivity(models.Model):
     def __str__(self):
         return f"{self.activity_type} - {self.application}"
 
+
+# Import Kanban models
+from .models_kanban import (
+    ApplicationPipeline,
+    KanbanStage,
+    StageTransition,
+    KanbanView,
+    PipelineMetrics,
+)
+
+__all__ = [
+    'Application',
+    'ApplicationStatus',
+    'ApplicationStage',
+    'ApplicationActivity',
+    'ApplicationPipeline',
+    'KanbanStage',
+    'StageTransition',
+    'KanbanView',
+    'PipelineMetrics',
+]
