@@ -170,7 +170,14 @@ class FileSecurityScanner:
         """Check if ClamAV is available"""
         try:
             import pyclamd
-            cd = pyclamd.ClamdUnixSocket()
+            import platform
+            
+            # Use network socket on Windows, Unix socket on Linux
+            if platform.system() == 'Windows':
+                cd = pyclamd.ClamdNetworkSocket()
+            else:
+                cd = pyclamd.ClamdUnixSocket()
+            
             return cd.ping()
         except:
             return False
@@ -182,13 +189,19 @@ class FileSecurityScanner:
         
         Installation:
         - Ubuntu: apt-get install clamav clamav-daemon
+        - Windows: winget install Cisco.ClamAV
         - Python: pip install pyclamd
-        - Start daemon: service clamav-daemon start
+        - Start daemon: service clamav-daemon start (Linux) or clamd.exe (Windows)
         """
         try:
             import pyclamd
+            import platform
             
-            cd = pyclamd.ClamdUnixSocket()
+            # Use network socket on Windows, Unix socket on Linux
+            if platform.system() == 'Windows':
+                cd = pyclamd.ClamdNetworkSocket()
+            else:
+                cd = pyclamd.ClamdUnixSocket()
             
             # Read file content
             uploaded_file.seek(0)
