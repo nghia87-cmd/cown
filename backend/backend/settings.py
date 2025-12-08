@@ -333,6 +333,30 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.payments.tasks.generate_monthly_invoices',
         'schedule': 30 * 24 * 3600.0,  # Every 30 days
     },
+    
+    # Resume Parser Cleanup Tasks
+    'cleanup-temp-resume-files': {
+        'task': 'apps.resume_parser.tasks_cleanup.cleanup_temp_resume_files',
+        'schedule': 3600.0,  # Every hour - clean files >1 hour old
+    },
+    'cleanup-old-parsed-resumes': {
+        'task': 'apps.resume_parser.tasks_cleanup.cleanup_old_parsed_resumes',
+        'schedule': 24 * 3600.0,  # Daily - delete failed records >30 days
+    },
+    'optimize-resume-storage': {
+        'task': 'apps.resume_parser.tasks_cleanup.optimize_resume_storage',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - compress old resumes
+    },
+    
+    # Elasticsearch Maintenance
+    'bulk-reindex-jobs': {
+        'task': 'apps.search.tasks.bulk_reindex_jobs',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - full job reindex
+    },
+    'bulk-reindex-companies': {
+        'task': 'apps.search.tasks.bulk_reindex_companies',
+        'schedule': 7 * 24 * 3600.0,  # Weekly - full company reindex
+    },
 }
 
 
